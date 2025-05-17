@@ -1,0 +1,6 @@
+*.o
+*.log
+test_ncurses
+monitor
+log/
+
