@@ -2,7 +2,7 @@ CC=gcc
 CFLAGS=-Wall -Wextra -g -Iinclude
 LDFLAGS=-lncurses
 
-SRC=src/main.c src/cpu.c src/memory.c src/disk.c
+SRC=src/main.c src/cpu.c src/memory.c src/disk.c src/log.c
 TARGET=monitor
 
 all:
