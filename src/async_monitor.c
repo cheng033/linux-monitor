@@ -11,6 +11,11 @@
 #include <aio.h>
 #include <errno.h>
 #include <time.h>
+#include <signal.h>
+
+// --- 全域變數，用於 signal 處理（讓 Ctrl+C 能正常結束）---
+volatile sig_atomic_t quit = 0;
+void handle_sigint(int sig) { quit = 1; }
 
 // --- 取得 CPU 使用率 ---
 float get_cpu_usage()
@@ -60,6 +65,7 @@ float get_disk_usage(const char *path)
     struct statvfs vfs;
     if (statvfs(path, &vfs) != 0) return -1;
     unsigned long total = vfs.f_blocks * vfs.f_frsize;
+    if (total == 0) return -1;  // 避免除以0
     unsigned long available = vfs.f_bavail * vfs.f_frsize;
     float usage = (1.0 - (float)available / total) * 100.0;
     return usage;
@@ -68,7 +74,7 @@ float get_disk_usage(const char *path)
 // --- 非同步寫入 log ---
 void aio_log_write(const char *log_path, const char *msg)
 {
-    static struct aiocb cb;
+    struct aiocb cb; // 放區域變數，避免多執行緒共用
     int fd = open(log_path, O_WRONLY | O_CREAT | O_APPEND, 0644);
     if (fd < 0) { perror("open log"); return; }
 
@@ -101,6 +107,9 @@ void gen_timestamp(char *buf, size_t buflen)
 
 int main()
 {
+    // 註冊 Ctrl+C 處理（讓 Ctrl+C 能正常結束 while）
+    signal(SIGINT, handle_sigint);
+
     // --- 1. 建立 timerfd 作為 1 秒定時器 ---
     int tfd = timerfd_create(CLOCK_MONOTONIC, 0);
     if (tfd < 0) { perror("timerfd_create"); return 1; }
@@ -114,9 +123,10 @@ int main()
 
     printf("啟動非同步系統資源監控，按 Ctrl+C 結束\n");
 
-    while (1) {
+    while (!quit) {
         struct epoll_event events[1];
         int n = epoll_wait(epfd, events, 1, -1);
+        if (n < 0) break;
         if (n > 0 && events[0].data.fd == tfd) {
             uint64_t exp;
             read(tfd, &exp, sizeof(exp)); // 清除 timerfd
@@ -139,8 +149,8 @@ int main()
         }
     }
 
+    printf("\n結束監控。\n");
     close(tfd);
     close(epfd);
     return 0;
 }
-
