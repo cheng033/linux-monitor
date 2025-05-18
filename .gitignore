@@ -2,5 +2,6 @@
 *.log
 test_ncurses
 monitor
+src/async_monitor
 log/
 
